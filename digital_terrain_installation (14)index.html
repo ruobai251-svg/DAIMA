@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>活着 · 大地记忆 | 3D Abstract Monochrome Installation</title>
+
+  <!-- 引入 Mediapipe 手势识别与 Tailwind CSS UI 库 -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Space+Grotesk:wght@300;400;600&family=Noto+Serif+SC:wght@200;300;400;700&display=swap');
+    
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: #020202; /* 极致纯粹的黑 */
+      font-family: 'Space Grotesk', 'Noto Serif SC', serif;
+      user-select: none;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
+    }
+
+    .font-mono-tech {
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    /* 极致黑白磨砂控制板 */
+    .glass-panel {
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 25px 60px 0 rgba(0, 0, 0, 0.9);
+    }
+    
+    /* 银白金属质感滑动条 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      height: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.4);
+    }
+  </style>
+</head>
+
+<body class="relative w-screen h-screen overflow-hidden text-stone-200">
+
+  <!-- 核心艺术三维画布 -->
+  <canvas id="canvas"></canvas>
+
+  <!-- 左上角：美术馆展签 HUD -->
+  <div class="absolute top-10 left-10 z-10 pointer-events-none select-none">
+    <div class="flex items-baseline space-x-4">
+      <h1 class="text-2xl md:text-3xl font-extralight tracking-[0.35em] text-stone-100 uppercase drop-shadow-2xl">
+        活着 · 大地记忆
+      </h1>
+      <span class="text-[9px] tracking-widest text-stone-500 font-mono-tech uppercase">OPUS. 09</span>
+    </div>
+    <p class="text-[9px] tracking-[0.5em] text-stone-500 mt-2 uppercase font-mono-tech">
+      An Existential Digital Line-Grid Installation
+    </p>
+    
+    <!-- 实时地学测绘数据面板 (Abstract Telemetry Panel) -->
+    <div class="mt-6 hidden lg:flex flex-col space-y-1.5 text-[9px] text-stone-400/80 font-mono-tech bg-stone-950/60 p-4 rounded-xl border border-stone-900 max-w-[260px] pointer-events-auto">
+      <div class="flex justify-between">
+        <span>PERSPECTIVE TILT</span>
+        <span id="tele-tilt" class="text-white">0.00°</span>
+      </div>
+      <div class="flex justify-between">
+        <span>GRID DENSITY</span>
+        <span id="tele-density" class="text-stone-300">0</span>
+      </div>
+      <div class="flex justify-between">
+        <span>MEMORIES RESIDUE</span>
+        <span id="tele-residue" class="text-white">0</span>
+      </div>
+      <div class="flex justify-between">
+        <span>RESONATING FREQ</span>
+        <span id="tele-freq" class="text-stone-400">--- Hz</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部：文学哲思概念 (Yu Hua's Concept) -->
+  <div class="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 w-full max-w-xl px-6 text-center pointer-events-none">
+    <div id="narrative-card" class="opacity-0 translate-y-2 duration-1000 transition-all">
+      <p id="narrative-text" class="text-base md:text-lg font-light tracking-[0.25em] text-stone-100 leading-relaxed drop-shadow-md font-serif">
+        人是为了活着本身而活着的，而不是为了活着之外的任何事物而活着。
+      </p>
+      <p id="narrative-author" class="text-[10px] tracking-[0.3em] text-stone-400 mt-3 uppercase font-sans">
+        — 余华《活着》
+      </p>
+    </div>
+  </div>
+
+  <!-- 右侧：高级控制台与 A.I. 手势取景窗 -->
+  <div class="absolute top-8 right-8 z-10 flex flex-col items-end space-y-4">
+    
+    <!-- A.I. 交互测绘视窗 -->
+    <div class="relative glass-panel rounded-2xl overflow-hidden transition-all duration-700 w-44 shadow-2xl border border-stone-800">
+      <div class="relative aspect-video bg-black/80 flex items-center justify-center overflow-hidden">
+        <video id="video" autoplay playsinline class="w-full h-full object-cover scale-x-[-1] opacity-30 grayscale contrast-150"></video>
+        <!-- 摄像头状态提示 -->
+        <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-stone-950/95 text-stone-500 p-2 text-center transition-opacity duration-300">
+          <span class="text-[8px] tracking-[0.2em] uppercase font-mono-tech animate-pulse">A.I. MATRIX LOAD</span>
+        </div>
+        <!-- 状态标牌 -->
+        <div id="camera-status-tag" class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[7px] tracking-widest uppercase bg-stone-900 text-stone-500 border border-stone-800">
+          OFFLINE
+        </div>
+      </div>
+    </div>
+
+    <!-- 几何与混合配置面板 -->
+    <div class="glass-panel rounded-2xl p-4 flex flex-col space-y-3.5 w-48 text-stone-300 text-xs border border-stone-800">
+      <div class="flex items-center justify-between border-b border-stone-900 pb-2">
+        <span class="tracking-widest text-[9px] text-stone-400 uppercase font-mono-tech font-semibold">几何拓扑 Matrix</span>
+        <button id="info-btn" class="text-stone-500 hover:text-white transition">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </button>
+      </div>
+
+      <!-- 线条与结构配比 (极致黑白设计控制) -->
+      <div class="space-y-2 border-b border-stone-900 pb-3">
+        <span class="text-[9px] text-stone-500 uppercase tracking-widest block font-mono-tech">线面配比 Linear Ratio</span>
+        
+        <div class="flex items-center justify-between space-x-2">
+          <span class="text-[9px] text-stone-400 font-mono-tech">三维格栅 (线)</span>
+          <input type="range" id="mix-lines" min="0" max="1" step="0.05" value="0.75" class="w-24">
+        </div>
+
+        <div class="flex items-center justify-between space-x-2">
+          <span class="text-[9px] text-stone-400 font-mono-tech">节点余烬 (点)</span>
+          <input type="range" id="mix-points" min="0" max="1" step="0.05" value="0.8" class="w-24">
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-[9px] text-stone-400 font-mono-tech">垂直落线 Structure</span>
+          <input type="checkbox" id="mix-drops" checked class="rounded bg-stone-950 accent-white border-stone-800 w-3 h-3">
+        </div>
+      </div>
+
+      <!-- 自动视轨漫游 -->
+      <button id="toggle-orbit" class="w-full py-1.5 px-3 rounded bg-stone-900 hover:bg-stone-800 transition flex items-center justify-between border border-stone-800 text-stone-300">
+        <span class="tracking-widest text-[9px] font-mono-tech">视轨自动巡航</span>
+        <div class="w-1.5 h-1.5 rounded-full bg-white" id="orbit-indicator"></div>
+      </button>
+
+      <!-- 大地形变强度 (苦难波折阻力) -->
+      <div class="space-y-1">
+        <div class="flex justify-between text-[9px] text-stone-500 tracking-wider font-mono-tech">
+          <span>地层张力 Tension</span>
+          <span id="force-val" class="text-white">1.0x</span>
+        </div>
+        <input type="range" id="force-slider" min="0.2" max="2.5" step="0.1" value="1.0" class="w-full">
+      </div>
+
+      <!-- 算法环境音声开关 -->
+      <button id="toggle-audio" class="w-full py-2 px-3 rounded bg-stone-900 hover:bg-stone-800 text-stone-300 transition flex items-center justify-center space-x-2 border border-stone-800">
+        <svg id="audio-icon" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+        </svg>
+        <span class="tracking-widest text-[9px] font-mono-tech uppercase font-bold" id="audio-btn-text">开启环境声场</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 美术馆策展说明遮罩弹窗 -->
+  <div id="info-modal" class="absolute inset-0 bg-black/95 z-50 flex items-center justify-center p-6 transition-all duration-500 opacity-100">
+    <div class="glass-panel max-w-lg w-full rounded-3xl p-8 border border-stone-800 text-stone-300">
+      <div class="text-center border-b border-stone-900 pb-5 mb-6">
+        <h2 class="text-2xl font-light tracking-[0.3em] text-stone-100 font-serif">活着 · 大地记忆</h2>
+        <p class="text-[8px] tracking-[0.4em] text-stone-500 uppercase mt-2 font-mono-tech">To Live: Monochromatic Linear Topography</p>
+      </div>
+      
+      <div class="space-y-5 text-xs md:text-sm font-extralight text-stone-300 leading-relaxed mb-8">
+        <p class="text-center text-stone-400 italic font-serif">“人是为了活着本身而活着的，而不是为了活着之外的任何事物而活着。” — 余华</p>
+        
+        <div class="flex items-start space-x-4">
+          <div class="p-2 rounded bg-stone-900 text-sm mt-1">◼️</div>
+          <div>
+            <h4 class="font-semibold text-stone-100 tracking-wider">极致黑白抽象设计</h4>
+            <p class="text-xs text-stone-400 leading-relaxed mt-1">本装置完全去除了原有的廉价色彩，通过黑、白、灰的抽象参数化格栅线来隐喻生命的本质。向下垂挂的物理投影线勾勒出大地的地层骨骼，构成纯粹的纪念碑式设计。</p>
+          </div>
+        </div>
+
+        <div class="flex items-start space-x-4">
+          <div class="p-2 rounded bg-stone-900 text-sm mt-1">🐃</div>
+          <div>
+            <h4 class="font-semibold text-stone-100 tracking-wider">高精细度老农与牛的剪影</h4>
+            <p class="text-xs text-stone-400 leading-relaxed mt-1">在大地极极具张力的几何线条中，老农（福贵）和他的老牛在风雪般的余烬粒子中艰难前行。福贵躬身拉绳、手拄木杖，老牛肩峰高耸、牛角遒劲、四腿关节动态行走。他们通过高对比度的白边黑影轮廓完美显影在立体几何大地上。</p>
+          </div>
+        </div>
+
+        <div class="flex items-start space-x-4">
+          <div class="p-2 rounded bg-stone-900 text-sm mt-1">🔔</div>
+          <div>
+            <h4 class="font-semibold text-stone-100 tracking-wider">算法声学声场</h4>
+            <p class="text-xs text-stone-400 leading-relaxed mt-1">大地的每一次颤抖、抚摸、以及老农的脚步，都会演算出极其静穆深沉的微积分五声音阶（箜篌与铜磬质感），引领观众进入关于生命和坚韧的深度静思。</p>
+          </div>
+        </div>
+      </div>
+
+      <button id="close-info" class="w-full py-4 rounded-xl bg-white hover:bg-stone-200 text-black font-semibold tracking-[0.3em] text-xs transition duration-300 uppercase font-mono-tech">
+        进入装置展览 ENTER
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas ? canvas.getContext("2d") : null;
+
+    // Guaranteed boundaries to avoid reference errors
+    const W = () => canvas ? canvas.width : window.innerWidth;
+    const H = () => canvas ? canvas.height : window.innerHeight;
+
+    function resize() {
+      if (canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    function safeAddEventListener(id, event, callback) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener(event, callback);
+        return el;
+      }
+      return null;
+    }
+
+    let time = 0;
+    let handLandmarks = [];
+    
+    // 参数化高精格栅
+    let cols = 65;
+    let rows = 40;
+    let hGrid = [];        // 高度网格
+    let vGrid = [];        // 传导速度网格
+    
+    // 渲染参数比例 (黑、白、灰色谱下混合)
+    let weightLines = 0.75;
+    let weightPoints = 0.8;
+    let showDrops = true;
+
+    let autoOrbit = true;
+    let powerMultiplier = 1.0;
+    
+    // 三维相机视域参数
+    let cameraDistance = 330;
+    let cameraAngleX = -0.52; 
+    let cameraAngleY = 0.45;   
+    let targetAngleX = -0.52;
+    let targetAngleY = 0.45;
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+
+    // 浅水方程波动传导
+    const DAMPING = 0.965;
+    const COEF = 0.125; 
+
+    // 生成式音声引擎状态
+    let audioInitialized = false;
+    let audioCtx = null;
+    let masterVolume = null;
+
+    // --- 用于老牛与人类脚步音效触发的全局状态跟踪 ---
+    let prevOxSwaySign = false;
+    let prevManSwaySign = false;
+    let lastOxStepTime = 0;
+    let lastManStepTime = 0;
+
+    // 大地余烬粒子 (代表生命苦难经历的微尘)
+    class EmberParticle {
+      constructor(x, y, z, intensity) {
+        this.x = x;
+        this.y = y; // 高度
+        this.z = z;
+        this.vx = (Math.random() - 0.5) * 1.2;
+        this.vy = -1.0 - Math.random() * 1.5; // 向上飘散
+        this.vz = (Math.random() - 0.5) * 1.2;
+        this.alpha = 1.0;
+        this.size = 0.8 + Math.random() * 1.8;
+        this.decay = 0.01 + Math.random() * 0.012;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.z += this.vz;
+        this.alpha -= this.decay;
+      }
+    }
+    const embers = [];
+
+    // --- 文学旁白名句数据环 ---
+    const quotes = [
+      { t: "一辈子很长，长到一头牛能把荒地走成熟路。", a: "— 余华《活着》" },
+      { t: "山会塌陷。人也会。但地平线总会重新长出来。", a: "— 坚韧的地貌记忆" },
+      { t: "所谓活着，不是拥有。是经过。", a: "— 生命的虚空留白" }
+    ];
+
+    let currentQuoteIdx = 0;
+
+    function rotateQuotes() {
+      const card = document.getElementById("narrative-card");
+      const textEl = document.getElementById("narrative-text");
+      const authorEl = document.getElementById("narrative-author");
+      if (!card || !textEl || !authorEl) return;
+
+      card.style.opacity = "0";
+      card.style.transform = "translateY(8px)";
+      setTimeout(() => {
+        currentQuoteIdx = (currentQuoteIdx + 1) % quotes.length;
+        textEl.innerText = quotes[currentQuoteIdx].t;
+        authorEl.innerText = quotes[currentQuoteIdx].a;
+        card.style.opacity = "1";
+        card.style.transform = "translateY(0)";
+      }, 1500);
+    }
+    setInterval(rotateQuotes, 10000);
+
+    function initTerrain() {
+      hGrid = [];
+      vGrid = [];
+      for (let i = 0; i < cols; i++) {
+        hGrid[i] = [];
+        vGrid[i] = [];
+        for (let j = 0; j < rows; j++) {
+          hGrid[i][j] = 0;
+          vGrid[i][j] = 0;
+        }
+      }
+    }
+    initTerrain();
+
+    function updateWavePhysics() {
+      let totalEnergy = 0;
+      for (let i = 1; i < cols - 1; i++) {
+        for (let j = 1; j < rows - 1; j++) {
+          vGrid[i][j] += (
+            hGrid[i - 1][j] +
+            hGrid[i + 1][j] +
+            hGrid[i][j - 1] +
+            hGrid[i][j + 1] -
+            4 * hGrid[i][j]
+          ) * COEF;
+          
+          vGrid[i][j] *= DAMPING; 
+          totalEnergy += Math.abs(vGrid[i][j]) + Math.abs(hGrid[i][j]);
+        }
+      }
+
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          hGrid[i][j] += vGrid[i][j];
+          
+          // 在剧烈形变处，激发出具有生命质感的黑白灰烟尘余烬
+          if (Math.abs(vGrid[i][j]) > 0.45 && Math.random() < 0.15) {
+            const spacingX = 400 / cols;
+            const spacingY = 320 / rows;
+            const x = (i - cols / 2) * spacingX;
+            const z = (j - rows / 2) * spacingY;
+            embers.push(new EmberParticle(x, hGrid[i][j], z, Math.abs(hGrid[i][j])));
+          }
+        }
+      }
+
+      // --- 动态合成并调节大地风啸声 ---
+      if (audioInitialized && audioSystem && audioSystem.initialized && audioSystem.ctx && audioSystem.ctx.state !== 'suspended') {
+        const windVolume = 0.01 + Math.min(0.24, totalEnergy * 0.003) * powerMultiplier;
+        const windFreq = 180 + Math.min(600, totalEnergy * 2.5) + Math.sin(time * 0.05) * 60;
+        
+        if (audioSystem.windFilter && audioSystem.windGain) {
+          audioSystem.windFilter.frequency.setTargetAtTime(windFreq, audioSystem.ctx.currentTime, 0.25);
+          audioSystem.windGain.gain.setTargetAtTime(windVolume, audioSystem.ctx.currentTime, 0.35);
+        }
+      }
+
+      // 边缘消波，避免剧烈反射干扰参数美感
+      for (let i = 0; i < cols; i++) {
+        hGrid[i][0] *= 0.90;
+        hGrid[i][rows - 1] *= 0.90;
+      }
+      for (let j = 0; j < rows; j++) {
+        hGrid[0][j] *= 0.90;
+        hGrid[cols - 1][j] *= 0.90;
+      }
+
+      // 更新 HUD 面板数据
+      const teleDensity = document.getElementById("tele-density");
+      if (teleDensity) {
+        teleDensity.innerText = `${cols} × ${rows}`;
+      }
+      const teleResidue = document.getElementById("tele-residue");
+      if (teleResidue) {
+        teleResidue.innerText = embers.length.toString();
+      }
+    }
+
+    // --- 三维空间到屏幕二维空间的透视变换投影 ---
+    function project3D(x, y, z) {
+      const cx = W() / 2;
+      const cy = H() / 2 + 50; 
+
+      const cosX = Math.cos(cameraAngleX);
+      const sinX = Math.sin(cameraAngleX);
+      const cosY = Math.cos(cameraAngleY);
+      const sinY = Math.sin(cameraAngleY);
+
+      // 绕 Y 轴(Yaw)旋转
+      let rx1 = x * cosY + z * sinY;
+      let rz1 = -x * sinY + z * cosY;
+
+      // 绕 X 轴(Pitch)旋转
+      let ry2 = y * cosX - rz1 * sinX;
+      let rz2 = y * sinX + rz1 * cosX;
+
+      const fov = 480; 
+      const pz = rz2 + cameraDistance;
+      
+      if (pz <= 10) return null; 
+
+      const sx = cx + (rx1 * fov) / pz;
+      const sy = cy + (ry2 * fov) / pz;
+
+      return { x: sx, y: sy, depth: pz };
+    }
+
+    function injectDisplacement(ix, iy, size = 3, force = 4.0) {
+      const gridCol = Math.floor(((ix - W()/4) / (W()/2)) * cols);
+      const gridRow = Math.floor(((iy - H()/3) / (H()/2)) * rows);
+
+      if (gridCol >= 1 && gridCol < cols - 1 && gridRow >= 1 && gridRow < rows - 1) {
+        let maxDisp = 0;
+        for (let di = -size; di <= size; di++) {
+          for (let dj = -size; dj <= size; dj++) {
+            const ni = gridCol + di;
+            const nj = gridRow + dj;
+            if (ni >= 0 && ni < cols && nj >= 0 && nj < rows) {
+              const d = Math.hypot(di, dj);
+              const factor = Math.max(0, 1 - d / size);
+              const val = factor * force * powerMultiplier;
+              vGrid[ni][nj] += val;
+              if (val > maxDisp) maxDisp = val;
+            }
+          }
+        }
+        
+        if (Math.abs(ix - prevInterX) > 10 && audioInitialized) {
+          triggerShimmerNote(iy);
+          // --- 当产生大面积强烈形变时，触发深层地裂闷响音效 ---
+          if (maxDisp > 2.8 && Math.random() < 0.3) {
+            audioSystem.triggerTectonicCrack(maxDisp);
+          }
+        }
+      }
+      prevInterX = ix;
+      prevInterY = iy;
+    }
+
+    // --- 辅助刻度图网格 ---
+    function drawCuratorLines() {
+      if (!ctx) return;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.02)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(W()/2, 30); ctx.lineTo(W()/2, H() - 30);
+      ctx.moveTo(30, H()/2); ctx.lineTo(W() - 30, H()/2);
+      ctx.stroke();
+
+      // 测绘四角括号
+      const pad = 35;
+      const len = 15;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.beginPath();
+      // 左上
+      ctx.moveTo(pad + len, pad); ctx.lineTo(pad, pad); ctx.lineTo(pad, pad + len);
+      // 右上
+      ctx.moveTo(W() - pad - len, pad); ctx.lineTo(W() - pad, pad); ctx.lineTo(W() - pad, pad + len);
+      // 左下
+      ctx.moveTo(pad + len, H() - pad); ctx.lineTo(pad, H() - pad); ctx.lineTo(pad, H() - pad + len);
+      // 右下
+      ctx.moveTo(W() - pad - len, H() - pad); ctx.lineTo(W() - pad, H() - pad); ctx.lineTo(W() - pad, H() - pad + len);
+      ctx.stroke();
+
+      const teleTilt = document.getElementById("tele-tilt");
+      if (teleTilt) {
+        teleTilt.innerText = (cameraAngleX * 180 / Math.PI).toFixed(1) + "°";
+      }
+    }
+
+    // --- 动态行者 (福贵与老牛) 漫游参数 ---
+    let pilgrimProgress = 0.15; 
+    const pilgrimSpeed = 0.0006;
+
+    function drawPilgrims(spacingX, spacingY) {
+      if (!ctx) return;
+      pilgrimProgress += pilgrimSpeed;
+      if (pilgrimProgress > 0.85) pilgrimProgress = 0.15;
+
+      const colFloat = pilgrimProgress * cols;
+      const colIdx = Math.floor(colFloat);
+      const rowIdx = Math.floor(rows / 2); 
+
+      if (colIdx < 1 || colIdx >= cols - 1) return;
+
+      // 双线性高度插值，保证角色完美贴合波动的大地地貌
+      const fract = colFloat - colIdx;
+      const hLeft = hGrid[colIdx][rowIdx];
+      const hRight = hGrid[colIdx + 1][rowIdx];
+      const smoothH = hLeft * (1 - fract) + hRight * fract;
+
+      const posX = (colFloat - cols/2) * spacingX;
+      const posZ = (rowIdx - rows/2) * spacingY;
+
+      const basePos = project3D(posX, smoothH, posZ);
+      if (!basePos) return;
+
+      // --- 实时动态触发人与老牛的朝朝圣脚步声 ---
+      const runCycle = time * 0.08;
+      if (audioInitialized && audioSystem && audioSystem.initialized && audioSystem.ctx && audioSystem.ctx.state !== 'suspended') {
+        const stepInterval = 400; // 防连击CD
+        const now = Date.now();
+        const oxSwaySign = Math.sin(runCycle) >= 0;
+        const manSwaySign = Math.sin(runCycle + Math.PI) >= 0;
+
+        // 老牛的摆腿极值点触发脚步声
+        if (prevOxSwaySign !== undefined && prevOxSwaySign !== oxSwaySign) {
+          if (now - lastOxStepTime > stepInterval) {
+            audioSystem.triggerFootstep(true); // 触发牛蹄沉闷声
+            lastOxStepTime = now;
+          }
+        }
+        prevOxSwaySign = oxSwaySign;
+
+        // 农民的手杖和步伐触地
+        if (prevManSwaySign !== undefined && prevManSwaySign !== manSwaySign) {
+          if (now - lastManStepTime > stepInterval) {
+            audioSystem.triggerFootstep(false); // 触发人行脚步声
+            lastManStepTime = now;
+          }
+        }
+        prevManSwaySign = manSwaySign;
+      }
+
+      ctx.save();
+      ctx.translate(basePos.x, basePos.y);
+      const s = Math.max(0.3, 250 / basePos.depth); 
+      ctx.scale(s, s);
+
+      // --- 核心角色黑白灰渲染规范 ---
+      ctx.fillStyle = "#020202";              // 纯黑主体
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)"; // 极致纯白轮廓
+      ctx.lineWidth = 1.8;
+
+      // 1. 绘制老牛的精细剪影 (Refined Ox Outline)
+      ctx.save();
+      ctx.translate(32, -12); // 牛的相对偏移
+
+      // 计算老牛真实的走步腿部运动
+      const leg1Sway = Math.sin(runCycle) * 11;
+      const leg2Sway = -Math.sin(runCycle) * 11;
+
+      // 【牛蹄四肢】（带腿部弯折关节）
+      // 前左肢 (腿部多段折线)
+      ctx.beginPath();
+      ctx.moveTo(10, 5);
+      ctx.lineTo(13 + leg1Sway * 0.3, 14);
+      ctx.lineTo(12 + leg1Sway * 0.5, 22);
+      ctx.stroke();
+      // 前右肢
+      ctx.beginPath();
+      ctx.moveTo(15, 5);
+      ctx.lineTo(13 + leg2Sway * 0.3, 14);
+      ctx.lineTo(14 + leg2Sway * 0.5, 22);
+      ctx.stroke();
+      // 后左肢
+      ctx.beginPath();
+      ctx.moveTo(-15, 5);
+      ctx.lineTo(-12 + leg2Sway * 0.3, 15);
+      ctx.lineTo(-11 + leg2Sway * 0.5, 22);
+      ctx.stroke();
+      // 后右肢
+      ctx.beginPath();
+      ctx.moveTo(-10, 5);
+      ctx.lineTo(-12 + leg1Sway * 0.3, 15);
+      ctx.lineTo(-9 + leg1Sway * 0.5, 22);
+      ctx.stroke();
+
+      // 【牛身躯主体、颈项驼峰与牛头】
+      ctx.beginPath();
+      // 从屁股开始画
+      ctx.moveTo(-22, 2);
+      // 尾部弧度
+      ctx.quadraticCurveTo(-26, -5, -20, -10);
+      // 牛背部 & 高耸的雄壮前肩 hump (典型的拉犁牛特征)
+      ctx.quadraticCurveTo(-5, -14, 10, -16);
+      // 头部耳朵和低垂的沉重额头
+      ctx.lineTo(22, -15);
+      ctx.lineTo(26, -11);
+      // 嘴部
+      ctx.lineTo(23, -5);
+      // 下颚与下巴，连接到脖子胸脯
+      ctx.lineTo(15, -4);
+      ctx.lineTo(10, 4);
+      // 腹部下沿
+      ctx.quadraticCurveTo(-5, 8, -22, 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 【遒劲弯曲的牛角】
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(19, -15);
+      ctx.quadraticCurveTo(27, -25, 22, -28); // 右角
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(16, -14);
+      ctx.quadraticCurveTo(22, -23, 17, -26); // 左角
+      ctx.stroke();
+
+      // 【牛尾巴】
+      ctx.beginPath();
+      // 从身体引出尾巴
+      ctx.moveTo(-22, -6);
+      ctx.quadraticCurveTo(-28, 5, -25, 12);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // 2. 牵引犁牛的生命缰绳 (Realistic catenary rope)
+      ctx.lineWidth = 1.0;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.beginPath();
+      ctx.moveTo(-12, -15); // 福贵的手部高度
+      ctx.quadraticCurveTo(8, -8, 48, -19); // 垂挂弧线，系到牛颈部
+      ctx.stroke();
+
+      // 3. 绘制福贵（负重行进老农）精细剪影 (Refined Farmer Outline)
+      ctx.save();
+      ctx.translate(-15, -15); // 农民的位置偏移
+
+      // 计算福贵艰难的迈步姿态
+      const walkPhase = runCycle + Math.PI; // 与牛呈错位步行
+      const farmLeg1 = Math.sin(walkPhase) * 9;
+      const farmLeg2 = -Math.sin(walkPhase) * 9;
+
+      // 【躬身双腿步伐】
+      // 前腿
+      ctx.beginPath();
+      ctx.moveTo(1, 10);
+      ctx.lineTo(3 + farmLeg1 * 0.4, 20);
+      ctx.lineTo(2 + farmLeg1 * 0.5, 25);
+      ctx.stroke();
+      // 后腿
+      ctx.beginPath();
+      ctx.moveTo(-2, 10);
+      ctx.lineTo(-4 + farmLeg2 * 0.4, 19);
+      ctx.lineTo(-5 + farmLeg2 * 0.5, 25);
+      ctx.stroke();
+
+      // 【身体躯体（15度向前吃力倾斜）、手臂与经典斗笠】
+      ctx.beginPath();
+      // 腰背臀部
+      ctx.moveTo(-6, 8);
+      ctx.quadraticCurveTo(-8, -4, -4, -10);
+      // 脖子与肩膀
+      ctx.lineTo(2, -12);
+      // 下额与胸部
+      ctx.lineTo(4, -4);
+      // 腹部
+      ctx.lineTo(2, 6);
+      ctx.lineTo(-6, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 【支撑大地的木杖】
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(3, -5); // 福贵右手
+      ctx.lineTo(12, 25); // 木杖撑地
+      ctx.stroke();
+
+      // 【高对比度斗笠（Conical Straw Hat）】
+      ctx.fillStyle = "#020202";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-9, -13);
+      ctx.lineTo(11, -13);
+      ctx.lineTo(1, -19);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+      ctx.restore();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // 相机拖拽视轨平滑转换
+      cameraAngleX += (targetAngleX - cameraAngleX) * 0.08;
+      cameraAngleY += (targetAngleY - cameraAngleY) * 0.08;
+
+      if (autoOrbit && !isDragging) {
+        targetAngleY = 0.45 + Math.sin(time * 0.002) * 0.35;
+      }
+
+      // 动力物理更迭
+      updateWavePhysics();
+
+      // 极致墨黑底色
+      if (ctx) {
+        ctx.clearRect(0, 0, W(), H());
+        ctx.fillStyle = "#020202";
+        ctx.fillRect(0, 0, W(), H());
+      }
+
+      // 1. 绘制测绘基准网格
+      drawCuratorLines();
+
+      // 2. 息壤节点三维建模计算
+      const spacingX = 400 / cols;
+      const spacingY = 320 / rows;
+      const pMap = []; 
+
+      for (let i = 0; i < cols; i++) {
+        pMap[i] = [];
+        for (let j = 0; j < rows; j++) {
+          const x = (i - cols / 2) * spacingX;
+          const y = (j - rows / 2) * spacingY;
+
+          // 大地的波澜纹理
+          const baseH = Math.sin(i * 0.075 + time * 0.015) * Math.cos(j * 0.08 + time * 0.01) * 10;
+          const totalY = baseH + hGrid[i][j];
+
+          const screenPos = project3D(x, totalY, y);
+          const basePos = project3D(x, 40, y); // 地面投影参考零点
+
+          pMap[i][j] = { 
+            x: screenPos ? screenPos.x : null,
+            y: screenPos ? screenPos.y : null,
+            bx: basePos ? basePos.x : null,
+            by: basePos ? basePos.y : null,
+            depth: screenPos ? screenPos.depth : 999,
+            rawH: totalY,
+            energy: Math.abs(vGrid[i][j])
+          };
+        }
+      }
+
+      // --- 3. 几何面片进行深度画家算法排序 (Painter's Algorithm) ---
+      const quads = [];
+      for (let i = 0; i < cols - 1; i++) {
+        for (let j = 0; j < rows - 1; j++) {
+          const p1 = pMap[i][j];
+          const p2 = pMap[i+1][j];
+          const p3 = pMap[i][j+1];
+          const p4 = pMap[i+1][j+1];
+
+          const avgDepth = (p1.depth + p2.depth + p3.depth + p4.depth) / 4;
+          quads.push({ i, j, depth: avgDepth });
+        }
+      }
+      quads.sort((a, b) => b.depth - a.depth);
+
+      // --- 4. 面、线叠层绘制 (极致高对比单色网格) ---
+      quads.forEach(q => {
+        if (!ctx) return;
+        const { i, j } = q;
+        const p1 = pMap[i][j];
+        const p2 = pMap[i + 1][j];
+        const p3 = pMap[i][j + 1];
+        const p4 = pMap[i + 1][j + 1];
+
+        if (!p1.x || !p2.x || !p3.x || !p4.x) return;
+
+        const meanH = (p1.rawH + p2.rawH + p3.rawH + p4.rawH) / 4;
+        const meanD = (p1.depth + p2.depth + p3.depth + p4.depth) / 4;
+
+        // 【线】发光单色格栅线 (Lines)
+        if (weightLines > 0.01) {
+          // 根据深度淡入淡出，呈现空气远视感
+          const lineAlpha = Math.max(0.04, weightLines * (1 - meanD / 520));
+          ctx.strokeStyle = `rgba(255, 255, 255, ${lineAlpha})`;
+          ctx.lineWidth = 0.55;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.lineTo(p4.x, p4.y);
+          ctx.lineTo(p3.x, p3.y);
+          ctx.closePath();
+          ctx.stroke();
+        }
+
+        // 【投影落线】挂壁建筑感垂直基准线 (Drop Structures)
+        if (showDrops && p1.bx && Math.abs(p1.rawH) > 4) {
+          const dropAlpha = Math.max(0.01, 0.08 * (1 - p1.depth / 500));
+          ctx.strokeStyle = `rgba(255, 255, 255, ${dropAlpha})`;
+          ctx.lineWidth = 0.45;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p1.bx, p1.by);
+          ctx.stroke();
+        }
+
+        // 【点】大地能量粒子 (Points)
+        if (weightPoints > 0.01 && p1.rawH > 8) {
+          // 重新微调粒子基础半径至1.25，使其在静态下具备充沛的质感分量
+          const sizeScale = 1.0 + p1.energy * 15;
+          const radius = Math.max(0.45, 1.25 - p1.depth / 450) * sizeScale;
+          const ptAlpha = Math.max(0.08, weightPoints * (0.2 + p1.rawH / 150));
+
+          ctx.fillStyle = `rgba(255, 255, 255, ${ptAlpha})`;
+          ctx.beginPath();
+          ctx.arc(p1.x, p1.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // --- 5. 绘制具有深重宿命感的行走福贵与老牛 ---
+      drawPilgrims(spacingX, spacingY);
+
+      // --- 6. 绘制由于大地形变激发的白色飘逸尘埃 (Memories Residue) ---
+      embers.forEach((eb, idx) => {
+        if (!ctx) return;
+        eb.update();
+        const screenPos = project3D(eb.x, eb.y, eb.z);
+        if (screenPos && eb.alpha > 0.01) {
+          const depthScale = Math.max(0.2, 1 - screenPos.depth / 500);
+          ctx.fillStyle = `rgba(255, 255, 255, ${eb.alpha * depthScale * 0.8})`;
+          ctx.beginPath();
+          ctx.arc(screenPos.x, screenPos.y, eb.size * depthScale, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          embers.splice(idx, 1);
+        }
+      });
+
+      // --- 7. 三维手势投影全息线条 ---
+      if (handLandmarks.length > 0) {
+        drawHolographicHand();
+      }
+
+      time += 0.5;
+    }
+
+    // --- 三维手势在黑白虚空中的极简光电星轨 ---
+    function drawHolographicHand() {
+      if (!ctx) return;
+      const scaleX = 400; 
+      const scaleY = -120; 
+      const scaleZ = 300; 
+
+      const projectedJoints = [];
+
+      handLandmarks.forEach((joint, idx) => {
+        const hX = (0.5 - joint.x) * scaleX;
+        const hY = -50 + (joint.y - 0.5) * scaleY;
+        const hZ = (joint.z) * scaleZ;
+
+        const screenPos = project3D(hX, hY, hZ);
+        projectedJoints[idx] = screenPos;
+
+        if (screenPos) {
+          ctx.fillStyle = "rgba(255, 255, 255, 0.9)"; 
+          ctx.beginPath();
+          ctx.arc(screenPos.x, screenPos.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      const connections = [
+        [0, 1], [1, 2], [2, 3], [3, 4],       
+        [0, 5], [5, 6], [6, 7], [7, 8],       
+        [9, 10], [10, 11], [11, 12],          
+        [13, 14], [14, 15], [15, 16],          
+        [0, 17], [17, 18], [18, 19], [19, 20], 
+        [5, 9], [9, 13], [13, 17]             
+      ];
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.lineWidth = 1.2;
+
+      connections.forEach(([start, end]) => {
+        const pS = projectedJoints[start];
+        const pE = projectedJoints[end];
+        if (pS && pE) {
+          ctx.beginPath();
+          ctx.moveTo(pS.x, pS.y);
+          ctx.lineTo(pE.x, pE.y);
+          ctx.stroke();
+        }
+      });
+    }
+
+    // --- 触模与旋转联动器 ---
+    if (canvas) {
+      canvas.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+      });
+
+      window.addEventListener("mousemove", (e) => {
+        if (isDragging) {
+          const dx = e.clientX - dragStartX;
+          const dy = e.clientY - dragStartY;
+          
+          targetAngleY += dx * 0.005;
+          targetAngleX = Math.max(-1.4, Math.min(-0.15, targetAngleX + dy * 0.005));
+
+          dragStartX = e.clientX;
+          dragStartY = e.clientY;
+        } else {
+          injectDisplacement(e.clientX, e.clientY, 3, 2.0);
+        }
+      });
+
+      window.addEventListener("mouseup", () => {
+        isDragging = false;
+      });
+
+      canvas.addEventListener("touchstart", (e) => {
+        isDragging = true;
+        const t = e.touches[0];
+        dragStartX = t.clientX;
+        dragStartY = t.clientY;
+      });
+
+      canvas.addEventListener("touchmove", (e) => {
+        const t = e.touches[0];
+        if (isDragging && e.touches.length === 1) {
+          const dx = t.clientX - dragStartX;
+          const dy = t.clientY - dragStartY;
+
+          targetAngleY += dx * 0.005;
+          targetAngleX = Math.max(-1.4, Math.min(-0.15, targetAngleX + dy * 0.005));
+
+          dragStartX = t.clientX;
+          dragStartY = t.clientY;
+        } else {
+          injectDisplacement(t.clientX, t.clientY, 2, 2.5);
+        }
+      });
+
+      canvas.addEventListener("touchend", () => {
+        isDragging = false;
+      });
+    }
+
+    // --- 智能 AI 摄像头识别 ---
+    try {
+      if (typeof Hands !== 'undefined' && typeof Camera !== 'undefined') {
+        const hands = new Hands({
+          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.65,
+          minTrackingConfidence: 0.65
+        });
+
+        hands.onResults(results => {
+          const tag = document.getElementById("camera-status-tag");
+          const placeholder = document.getElementById("camera-placeholder");
+          
+          const rawHands = results.multiHandLandmarks || [];
+          handLandmarks = rawHands[0] || [];
+
+          if (handLandmarks.length > 0) {
+            if (tag) {
+              tag.innerText = "ACTIVE";
+              tag.className = "absolute top-2 left-2 px-1.5 py-0.5 rounded text-[7px] tracking-widest bg-white text-black border border-white font-mono-tech";
+            }
+            if (placeholder) placeholder.style.opacity = 0;
+
+            const trackPoint = handLandmarks[9]; 
+            const mappedX = (1 - trackPoint.x) * W();
+            const mappedY = trackPoint.y * H();
+
+            injectDisplacement(mappedX, mappedY, 4, 5.5);
+          } else {
+            if (tag) {
+              tag.innerText = "STANDBY";
+              tag.className = "absolute top-2 left-2 px-1.5 py-0.5 rounded text-[7px] tracking-widest bg-stone-900 text-stone-500 border border-stone-800";
+            }
+          }
+        });
+
+        const video = document.getElementById("video");
+        if (video) {
+          const camera = new Camera(video, {
+            onFrame: async () => {
+              try {
+                await hands.send({ image: video });
+              } catch (err) {}
+            },
+            width: 480,
+            height: 360
+          });
+
+          camera.start().catch(() => {
+            handleCameraFallback();
+          });
+        } else {
+          handleCameraFallback();
+        }
+      } else {
+        handleCameraFallback();
+      }
+    } catch (e) {
+      handleCameraFallback();
+    }
+
+    function handleCameraFallback() {
+      const tag = document.getElementById("camera-status-tag");
+      if (tag) {
+        tag.innerText = "NO CAM";
+        tag.className = "absolute top-2 left-2 px-1.5 py-0.5 rounded text-[7px] tracking-widest bg-stone-800 text-stone-500 border border-stone-700/40";
+      }
+      const placeholder = document.getElementById("camera-placeholder");
+      if (placeholder) {
+        placeholder.innerHTML = `
+          <svg class="w-5 h-5 mb-1 opacity-50 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+          <span class="text-[7px] tracking-wider text-stone-600 uppercase font-mono-tech">TOUCH INTERACTION</span>
+        `;
+      }
+    }
+
+    class ProceduralSoundscape {
+      constructor() {
+        this.ctx = null;
+        this.initialized = false;
+        this.lowDroneNode = null;
+        this.lowPass = null;
+        
+        this.windNoise = null;
+        this.windFilter = null;
+        this.windGain = null;
+      }
+
+      init() {
+        if (this.initialized) return;
+
+        try {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          
+          masterVolume = this.ctx.createGain();
+          masterVolume.gain.setValueAtTime(0.16, this.ctx.currentTime); // 调和整体声场增益平衡
+          masterVolume.connect(this.ctx.destination);
+
+          // 极为幽静的低频大地律动
+          this.lowDroneNode = this.ctx.createOscillator();
+          this.lowDroneNode.type = 'sine';
+          this.lowDroneNode.frequency.setValueAtTime(55.00, this.ctx.currentTime); 
+
+          this.lowPass = this.ctx.createBiquadFilter();
+          this.lowPass.type = 'lowpass';
+          this.lowPass.frequency.setValueAtTime(90, this.ctx.currentTime);
+
+          this.lowDroneNode.connect(this.lowPass);
+          this.lowPass.connect(masterVolume);
+          this.lowDroneNode.start(0);
+
+          // 算法合成背景风噪气流场
+          const bufferSize = 2 * this.ctx.sampleRate;
+          const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const output = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1; // 填充白噪声
+          }
+          this.windNoise = this.ctx.createBufferSource();
+          this.windNoise.buffer = noiseBuffer;
+          this.windNoise.loop = true;
+
+          this.windFilter = this.ctx.createBiquadFilter();
+          this.windFilter.type = 'bandpass';
+          this.windFilter.frequency.setValueAtTime(220, this.ctx.currentTime);
+          this.windFilter.Q.setValueAtTime(3.0, this.ctx.currentTime);
+
+          this.windGain = this.ctx.createGain();
+          this.windGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
+
+          this.windNoise.connect(this.windFilter);
+          this.windFilter.connect(this.windGain);
+          this.windGain.connect(masterVolume);
+          this.windNoise.start(0);
+
+          // 激活安全标志位
+          this.initialized = true;
+          audioInitialized = true; // 【修复】开启全局音效交互
+          
+          if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+          }
+        } catch (err) {
+          console.error("音频API启动被拦截: ", err);
+        }
+      }
+
+      // 算法实时合成拉犁老牛与人类行走的高拟真触地摩擦踩踏声
+      triggerFootstep(isOx) {
+        if (!this.initialized || !this.ctx || this.ctx.state === 'suspended') return;
+
+        // 1. 合成干土踩踏的高频沙沙声 (白噪声短促爆裂)
+        const bufferSize = this.ctx.sampleRate * 0.10; // 100ms 短音
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        // 牛步伐更重（截止频率偏低），人类步伐相对清亮偏高
+        filter.frequency.setValueAtTime(isOx ? 150 : 280, this.ctx.currentTime);
+        filter.Q.setValueAtTime(2.0, this.ctx.currentTime);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(isOx ? 0.35 : 0.18, this.ctx.currentTime); // 【优化】提高脚步踩踏音量使其清晰
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.09);
+
+        // 2. 叠加极低沉的脚掌压力撞击音 (模拟泥土下陷的重量感)
+        const weightThud = this.ctx.createOscillator();
+        const thudGain = this.ctx.createGain();
+        weightThud.type = 'triangle';
+        weightThud.frequency.setValueAtTime(isOx ? 45 : 75, this.ctx.currentTime);
+        weightThud.frequency.exponentialRampToValueAtTime(5, this.ctx.currentTime + 0.05);
+        thudGain.gain.setValueAtTime(isOx ? 0.45 : 0.22, this.ctx.currentTime); // 【优化】高拟真物理重音
+        thudGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(masterVolume);
+
+        weightThud.connect(thudGain);
+        thudGain.connect(masterVolume);
+
+        noise.start();
+        weightThud.start();
+        noise.stop(this.ctx.currentTime + 0.1);
+        weightThud.stop(this.ctx.currentTime + 0.1);
+      }
+
+      // 算法实时合成地壳开裂/重度冲击沉重地裂回响
+      triggerTectonicCrack(force) {
+        if (!this.initialized || !this.ctx || this.ctx.state === 'suspended') return;
+        
+        const duration = 0.45;
+        const crackOsc = this.ctx.createOscillator();
+        const crackGain = this.ctx.createGain();
+        crackOsc.type = 'sawtooth';
+        crackOsc.frequency.setValueAtTime(70, this.ctx.currentTime);
+        crackOsc.frequency.exponentialRampToValueAtTime(22, this.ctx.currentTime + duration);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(100, this.ctx.currentTime);
+        filter.frequency.linearRampToValueAtTime(30, this.ctx.currentTime + duration);
+
+        crackGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
+        crackGain.gain.linearRampToValueAtTime(Math.min(0.38, 0.12 * force), this.ctx.currentTime + 0.04); // 【优化】
+        crackGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+        crackOsc.connect(filter);
+        filter.connect(crackGain);
+        crackGain.connect(masterVolume);
+
+        crackOsc.start();
+        crackOsc.stop(this.ctx.currentTime + duration + 0.05);
+      }
+
+      toggle() {
+        if (!this.initialized) {
+          this.init();
+          return true;
+        }
+
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+          audioInitialized = true;
+          return true;
+        } else {
+          this.ctx.suspend();
+          audioInitialized = false;
+          return false;
+        }
+      }
+    }
+
+    const audioSystem = new ProceduralSoundscape();
+
+    // 清越、空灵的风磬音级调式 [A, C, D, E, G]
+    function triggerShimmerNote(yVal) {
+      if (!audioSystem.initialized || !audioSystem.ctx || audioSystem.ctx.state === 'suspended' || !audioInitialized) return;
+
+      const scales = [110.00, 146.83, 164.81, 220.00, 293.66, 329.63, 440.00, 587.33, 659.25];
+      const scaleIndex = Math.min(scales.length - 1, Math.floor((yVal / H()) * scales.length));
+      const freq = scales[scales.length - 1 - scaleIndex];
+
+      const teleFreq = document.getElementById("tele-freq");
+      if (teleFreq) {
+        teleFreq.innerText = freq.toFixed(1) + " Hz";
+      }
+
+      const osc = audioSystem.ctx.createOscillator();
+      const gainNode = audioSystem.ctx.createGain();
+
+      osc.type = 'sine'; // 纯净的正弦钟磐音
+      osc.frequency.setValueAtTime(freq, audioSystem.ctx.currentTime);
+
+      gainNode.gain.setValueAtTime(0, audioSystem.ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.24, audioSystem.ctx.currentTime + 0.1); // 【优化】增强编钟的敲击清澈感
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioSystem.ctx.currentTime + 4.0); // 极长余韵
+
+      osc.connect(gainNode);
+      gainNode.connect(masterVolume);
+
+      osc.start(0);
+      osc.stop(audioSystem.ctx.currentTime + 4.2);
+    }
+
+    function syncAudioUI(active) {
+      const audioBtn = document.getElementById("toggle-audio");
+      const audioIcon = document.getElementById("audio-icon");
+      const audioText = document.getElementById("audio-btn-text");
+
+      if (active) {
+        if (audioBtn) audioBtn.className = "w-full py-2 px-3 rounded bg-white text-black font-bold tracking-widest text-[9px] font-mono-tech uppercase flex items-center justify-center space-x-2";
+        if (audioIcon) {
+          audioIcon.innerHTML = `
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          `;
+        }
+        if (audioText) audioText.innerText = "环境声景已激活";
+      } else {
+        if (audioBtn) audioBtn.className = "w-full py-2 px-3 rounded bg-stone-900 hover:bg-stone-800 text-stone-300 transition flex items-center justify-center space-x-2 border border-stone-800";
+        if (audioIcon) {
+          audioIcon.innerHTML = `
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          `;
+        }
+        if (audioText) audioText.innerText = "开启环境声场";
+      }
+    }
+
+    // --- UI 控制绑定与监听 ---
+    safeAddEventListener("mix-points", "input", (e) => {
+      weightPoints = parseFloat(e.target.value);
+    });
+
+    safeAddEventListener("mix-lines", "input", (e) => {
+      weightLines = parseFloat(e.target.value);
+    });
+
+    safeAddEventListener("mix-drops", "change", (e) => {
+      showDrops = e.target.checked;
+    });
+
+    safeAddEventListener("toggle-orbit", "click", () => {
+      autoOrbit = !autoOrbit;
+      const indicator = document.getElementById("orbit-indicator");
+      const orbitBtn = document.getElementById("toggle-orbit");
+      if (autoOrbit) {
+        if (indicator) indicator.className = "w-1.5 h-1.5 rounded-full bg-white";
+        if (orbitBtn) orbitBtn.classList.remove("text-stone-500");
+      } else {
+        if (indicator) indicator.className = "w-1.5 h-1.5 rounded-full bg-stone-600";
+        if (orbitBtn) orbitBtn.classList.add("text-stone-500");
+      }
+    });
+
+    safeAddEventListener("force-slider", "input", (e) => {
+      const v = parseFloat(e.target.value);
+      powerMultiplier = v;
+      const forceVal = document.getElementById("force-val");
+      if (forceVal) {
+        forceVal.innerText = v.toFixed(1) + "x";
+      }
+    });
+
+    safeAddEventListener("toggle-audio", "click", () => {
+      const isRunning = audioSystem.toggle();
+      syncAudioUI(isRunning);
+    });
+
+    safeAddEventListener("close-info", "click", () => {
+      const modal = document.getElementById("info-modal");
+      const card = document.getElementById("narrative-card");
+      if (modal) modal.style.opacity = "0";
+      setTimeout(() => {
+        if (modal) modal.classList.add("hidden");
+        if (card) {
+          card.style.opacity = "1";
+          card.style.transform = "translateY(0)";
+        }
+      }, 500);
+      
+      // 激活并同步状态
+      audioSystem.init();
+      syncAudioUI(true);
+    });
+
+    safeAddEventListener("info-btn", "click", () => {
+      const modal = document.getElementById("info-modal");
+      if (modal) {
+        modal.classList.remove("hidden");
+        setTimeout(() => modal.style.opacity = "1", 50);
+      }
+    });
+
+    // --- 启动渲染装置 ---
+    animate();
+
+  </script>
+</body>
+</html>
